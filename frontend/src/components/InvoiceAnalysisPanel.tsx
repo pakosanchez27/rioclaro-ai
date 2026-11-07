@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import {
   AlertCircle,
   BrainCircuit,
@@ -118,6 +119,19 @@ export default function InvoiceAnalysisPanel({ invoiceId }: Props) {
         <h3 className="font-bold text-slate-900">
           Hallazgos detectados
         </h3>
+
+        {analysis.duplicate_check?.status === 'possible' && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Posible duplicado: revisión necesaria</p>
+            {analysis.duplicate_check.related_invoices.map((related) => (
+              <p key={related.invoice_id} className="mt-2">
+                <Link className="font-semibold underline" to={`/facturas/${encodeURIComponent(related.invoice_id)}`}>
+                  Factura {related.invoice_id}
+                </Link>: {related.reason}
+              </p>
+            ))}
+          </div>
+        )}
 
         {analysis.findings.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">

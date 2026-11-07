@@ -1,26 +1,27 @@
 
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { logoutEvaluator } from '../../lib/api'
 import {
   LayoutDashboard,
   FileText,
   ScanLine,
-  ClipboardCheck,
-  History,
-  Settings,
   Menu,
   X,
   Sparkles,
   ShieldCheck,
+  BrainCircuit,
+  ClipboardList,
+  BarChart3,
 } from 'lucide-react'
 
 const navigation = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/facturas', label: 'Facturas', icon: FileText },
   { to: '/analizar', label: 'Analizar factura', icon: ScanLine },
-  { to: '/revisiones', label: 'Revisiones', icon: ClipboardCheck },
-  { to: '/historial', label: 'Historial', icon: History },
-  { to: '/configuracion', label: 'Configuración', icon: Settings },
+  { to: '/asistente', label: 'Asistente Río Claro', icon: BrainCircuit },
+  { to: '/pedidos-quejas', label: 'Pedidos y quejas', icon: ClipboardList },
+  { to: '/reportes', label: 'Reportes', icon: BarChart3 },
 ]
 
 export default function AppLayout() {
@@ -94,6 +95,7 @@ export default function AppLayout() {
         </nav>
 
         <div className="border-t border-white/10 p-5">
+          <button onClick={() => { void logoutEvaluator().finally(() => window.location.reload()) }} className="mb-4 w-full rounded-xl border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10">Cerrar sesión</button>
           <div className="flex items-start gap-3 rounded-xl bg-white/5 p-3">
             <ShieldCheck className="mt-0.5 shrink-0 text-teal-300" size={19} />
             <div>
@@ -101,7 +103,7 @@ export default function AppLayout() {
                 Entorno de desarrollo
               </p>
               <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                La autenticación de usuarios se habilitará próximamente.
+                Datos ficticios para evaluación. Sin identidad personal verificada.
               </p>
             </div>
           </div>
@@ -129,7 +131,8 @@ export default function AppLayout() {
           </div>
 
           <span className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-4 py-2 text-xs font-semibold text-teal-700">
-            Modo demostración
+            <span className="sm:hidden">Demo</span>
+            <span className="hidden sm:inline">Modo demostración</span>
           </span>
         </header>
 

@@ -44,3 +44,115 @@ CREATE TABLE IF NOT EXISTS invoice_analyses (
     created_at TEXT NOT NULL,
     FOREIGN KEY (invoice_id) REFERENCES invoices(id)
 );
+
+CREATE TABLE IF NOT EXISTS invoice_document_claims (
+    sha256 TEXT PRIMARY KEY,
+    invoice_id TEXT,
+    state TEXT NOT NULL CHECK (state IN ('processing', 'completed')),
+    claimed_at TEXT NOT NULL,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
+
+CREATE TABLE IF NOT EXISTS invoice_business_claims (
+    business_key TEXT PRIMARY KEY,
+    document_sha256 TEXT NOT NULL,
+    invoice_id TEXT,
+    state TEXT NOT NULL CHECK (state IN ('processing', 'completed')),
+    claimed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_usage_daily (
+    usage_date TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (usage_date, operation)
+);
+
+CREATE TABLE IF NOT EXISTS branches (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('active', 'inactive'))
+);
+
+CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY,
+    sku TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL,
+    unit TEXT NOT NULL,
+    price REAL NOT NULL CHECK (price >= 0),
+    currency TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('active', 'inactive'))
+);
+
+CREATE TABLE IF NOT EXISTS product_aliases (
+    alias_key TEXT PRIMARY KEY,
+    alias TEXT NOT NULL,
+    product_id TEXT NOT NULL REFERENCES products(id)
+);
+
+CREATE TABLE IF NOT EXISTS inventory (
+    product_id TEXT NOT NULL REFERENCES products(id),
+    branch_id TEXT NOT NULL REFERENCES branches(id),
+    quantity INTEGER NOT NULL CHECK (quantity >= 0),
+    updated_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    PRIMARY KEY (product_id, branch_id)
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    folio TEXT PRIMARY KEY,
+    customer_name TEXT NOT NULL,
+    branch_id TEXT NOT NULL REFERENCES branches(id),
+    order_date TEXT NOT NULL,
+    status TEXT NOT NULL,
+    total REAL NOT NULL,
+    currency TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+    order_folio TEXT NOT NULL REFERENCES orders(folio),
+    product_id TEXT NOT NULL REFERENCES products(id),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price REAL NOT NULL CHECK (unit_price >= 0),
+    PRIMARY KEY (order_folio, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS policies (
+    id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    content TEXT NOT NULL,
+    effective_date TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('current', 'obsolete')),
+    PRIMARY KEY (id, version)
+);
+
+CREATE TABLE IF NOT EXISTS complaints (
+    folio TEXT PRIMARY KEY,
+    customer_name TEXT NOT NULL,
+    order_folio TEXT REFERENCES orders(folio),
+    branch_id TEXT NOT NULL REFERENCES branches(id),
+    message TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS evaluation_sessions (
+    token_hash TEXT PRIMARY KEY,
+    expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS evaluation_login_guard (
+    id TEXT PRIMARY KEY,
+    failed_count INTEGER NOT NULL,
+    locked_until TEXT NOT NULL
+);

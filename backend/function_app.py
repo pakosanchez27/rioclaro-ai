@@ -11,6 +11,8 @@ from repositories.invoices import (
 
 from repositories.invoice_reviews import list_invoice_reviews
 from repositories.invoice_analyses import get_saved_invoice_analysis
+from repositories.business_data import get_demo_options, get_branch_report
+from repositories.complaints import create_complaint, get_complaint, ComplaintInputError
 import logging
 
 from azure.core.exceptions import HttpResponseError
@@ -25,12 +27,19 @@ from services.invoice_pipeline import (
     analyze_and_save_invoice,
     IncompleteInvoiceError,
 )
+from services.invoice_duplicates import (
+    DuplicateDocumentError,
+    DuplicateBusinessError,
+)
+from services.ai_quota import QuotaExceededError, AiOperationDisabledError, get_quota_status
+from services.business_assistant import ask_assistant, AssistantInputError
 from services.invoice_review import (
     review_invoice,
     ReviewValidationError,
     InvoiceNotFoundError,
     InvoiceAlreadyReviewedError,
 )
+from security.evaluator_auth import login as evaluator_login, logout as evaluator_logout, validate_session, EvaluatorAuthError
 
 app = func.FunctionApp(
     http_auth_level=func.AuthLevel.ANONYMOUS
@@ -62,6 +71,37 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
 from security.auth_middleware import authorize
 
 
+@app.route(route="auth/evaluator/login", methods=["POST"])
+def auth_evaluator_login(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        payload = req.get_json()
+        code = payload.get("code") if isinstance(payload, dict) else None
+        token, expires_at = evaluator_login(code)
+        return func.HttpResponse(
+            json.dumps({"access_token": f"ev_{token}", "expires_at": expires_at}),
+            status_code=200, mimetype="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+    except ValueError:
+        return func.HttpResponse(json.dumps({"error": "Credencial incorrecta"}), status_code=400, mimetype="application/json")
+    except EvaluatorAuthError as exc:
+        return func.HttpResponse(json.dumps({"error": str(exc)}), status_code=exc.status_code, mimetype="application/json")
+
+
+@app.route(route="auth/evaluator/logout", methods=["POST"])
+def auth_evaluator_logout(req: func.HttpRequest) -> func.HttpResponse:
+    authorization = req.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer ev_"):
+        return func.HttpResponse(json.dumps({"error": "Sesion expirada"}), status_code=401, mimetype="application/json")
+    token = authorization[len("Bearer ev_"):]
+    try:
+        validate_session(token)
+        evaluator_logout(token)
+    except EvaluatorAuthError as exc:
+        return func.HttpResponse(json.dumps({"error": str(exc)}), status_code=exc.status_code, mimetype="application/json")
+    return func.HttpResponse(status_code=204)
+
+
 @app.route(
     route="auth/me",
     methods=["GET"],
@@ -77,6 +117,131 @@ def auth_me(req: func.HttpRequest) -> func.HttpResponse:
         status_code=200,
         mimetype="application/json",
     )
+
+
+@app.route(route="assistant/ask", methods=["POST"])
+def assistant_ask(req: func.HttpRequest) -> func.HttpResponse:
+    user, error = authorize(req, "assistant:ask")
+    if error is not None:
+        return error
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return func.HttpResponse(
+            json.dumps({"error": "Se esperaba un objeto JSON"}),
+            status_code=400, mimetype="application/json",
+        )
+
+    try:
+        result = ask_assistant(body.get("message"), body.get("conversation_id"))
+    except AssistantInputError as exc:
+        return func.HttpResponse(
+            json.dumps({"error": str(exc)}, ensure_ascii=False),
+            status_code=400, mimetype="application/json",
+        )
+    except QuotaExceededError as exc:
+        return func.HttpResponse(
+            json.dumps({"error": "Cuota diaria del asistente agotada. Intenta de nuevo tras el reinicio.",
+                        "resets_at": exc.resets_at,
+                        "retry_after_seconds": exc.retry_after_seconds}),
+            status_code=429, mimetype="application/json",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        )
+    except (AiOperationDisabledError, RuntimeError):
+        return func.HttpResponse(
+            json.dumps({"error": "Asistente no disponible"}),
+            status_code=503, mimetype="application/json",
+        )
+    except APIError:
+        logging.error("Fallo el servicio de seleccion de consultas")
+        return func.HttpResponse(
+            json.dumps({"error": "No fue posible consultar Azure OpenAI"}),
+            status_code=502, mimetype="application/json",
+        )
+
+    return func.HttpResponse(
+        json.dumps(result, ensure_ascii=False),
+        status_code=200, mimetype="application/json",
+    )
+
+
+@app.route(route="assistant/quota", methods=["GET"])
+def assistant_quota(req: func.HttpRequest) -> func.HttpResponse:
+    user, error = authorize(req, "assistant:ask")
+    if error is not None:
+        return error
+    try:
+        initialize_database()
+        quota = get_quota_status("assistant")
+    except AiOperationDisabledError:
+        return func.HttpResponse(
+            json.dumps({"error": "Cuota del asistente no disponible"}),
+            status_code=503, mimetype="application/json",
+        )
+    return func.HttpResponse(
+        json.dumps(quota), status_code=200, mimetype="application/json",
+    )
+
+
+@app.route(route="business/options", methods=["GET"])
+def business_options(req: func.HttpRequest) -> func.HttpResponse:
+    user, error = authorize(req, "complaints:read")
+    if error is not None:
+        return error
+    initialize_database()
+    return func.HttpResponse(
+        json.dumps(get_demo_options(), ensure_ascii=False),
+        status_code=200, mimetype="application/json",
+    )
+
+
+@app.route(route="business/reports", methods=["GET"])
+def business_reports(req: func.HttpRequest) -> func.HttpResponse:
+    user, error = authorize(req, "reports:read")
+    if error is not None:
+        return error
+    initialize_database()
+    return func.HttpResponse(
+        json.dumps(get_branch_report(), ensure_ascii=False),
+        status_code=200, mimetype="application/json",
+    )
+
+
+@app.route(route="complaints", methods=["POST"])
+def complaints_create(req: func.HttpRequest) -> func.HttpResponse:
+    user, error = authorize(req, "complaints:write")
+    if error is not None:
+        return error
+    try:
+        body = req.get_json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return func.HttpResponse(json.dumps({"error": "JSON inválido"}), status_code=400, mimetype="application/json")
+    initialize_database()
+    try:
+        result = create_complaint(
+            body.get("order_folio"), body.get("branch_code"),
+            body.get("message"), body.get("category"),
+        )
+    except ComplaintInputError as exc:
+        return func.HttpResponse(json.dumps({"error": str(exc)}, ensure_ascii=False), status_code=400, mimetype="application/json")
+    return func.HttpResponse(json.dumps(result, ensure_ascii=False), status_code=201, mimetype="application/json")
+
+
+@app.route(route="complaints/{folio}", methods=["GET"])
+def complaints_detail(req: func.HttpRequest) -> func.HttpResponse:
+    user, error = authorize(req, "complaints:read")
+    if error is not None:
+        return error
+    initialize_database()
+    result = get_complaint(req.route_params.get("folio", ""))
+    if result is None:
+        return func.HttpResponse(json.dumps({"error": "Queja no encontrada"}), status_code=404, mimetype="application/json")
+    return func.HttpResponse(json.dumps(result, ensure_ascii=False), status_code=200, mimetype="application/json")
 
 @app.route(route="invoices", methods=["GET"])
 def invoices_list(req: func.HttpRequest) -> func.HttpResponse:
@@ -131,6 +296,11 @@ def invoices_stats(req: func.HttpRequest) -> func.HttpResponse:
     methods=["GET"],
 )
 def invoices_detail(req: func.HttpRequest) -> func.HttpResponse:
+    # Algunos hosts resuelven /invoices/stats como la ruta parametrizada.
+    # Conservar el contrato público y la autorización específica de stats.
+    if req.route_params.get("factura_id") == "stats":
+        return invoices_stats(req)
+
     user, error = authorize(req, "invoices:read")
 
     if error is not None:
@@ -400,6 +570,36 @@ def invoices_analyze(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             json.dumps({"error": str(exc)}),
             status_code=400,
+            mimetype="application/json",
+        )
+
+    except (DuplicateDocumentError, DuplicateBusinessError) as exc:
+        related_invoice_id = getattr(exc, "invoice_id", None) or getattr(
+            exc, "related_invoice_id", None
+        )
+        return func.HttpResponse(
+            json.dumps({
+                "error": str(exc),
+                "related_invoice_id": related_invoice_id,
+            }),
+            status_code=409,
+            mimetype="application/json",
+        )
+
+    except QuotaExceededError as exc:
+        return func.HttpResponse(
+            json.dumps({"error": "Cuota diaria de análisis agotada. Intenta de nuevo tras el reinicio.",
+                        "resets_at": exc.resets_at,
+                        "retry_after_seconds": exc.retry_after_seconds}),
+            status_code=429,
+            mimetype="application/json",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        )
+
+    except AiOperationDisabledError as exc:
+        return func.HttpResponse(
+            json.dumps({"error": str(exc)}),
+            status_code=503,
             mimetype="application/json",
         )
 

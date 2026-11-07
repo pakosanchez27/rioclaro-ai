@@ -8,12 +8,17 @@ from security.entra_auth import (
     AuthenticationError,
 )
 from security.permissions import has_permission
+from security.evaluator_auth import validate_session, EvaluatorAuthError
 
 DEMO_PERMISSIONS = {
     "invoices:read",
     "invoices:stats",
     "invoices:analyze",
     "invoices:review",
+    "assistant:ask",
+    "complaints:read",
+    "complaints:write",
+    "reports:read",
 }
 
 
@@ -82,7 +87,12 @@ def authorize(req: func.HttpRequest, permission: str):
         )
 
     try:
-        user = validate_access_token(parts[1])
+        if parts[1].startswith("ev_"):
+            user = validate_session(parts[1][3:])
+        else:
+            user = validate_access_token(parts[1])
+    except EvaluatorAuthError:
+        return None, error_response(401, "Sesion expirada")
     except AuthenticationError:
         return None, error_response(
             401,
