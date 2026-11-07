@@ -36,3 +36,11 @@ CREATE TABLE IF NOT EXISTS invoice_reviews (
 
 CREATE INDEX IF NOT EXISTS idx_invoice_reviews_invoice
 ON invoice_reviews(invoice_id);
+
+CREATE TABLE IF NOT EXISTS invoice_analyses (
+    invoice_id TEXT PRIMARY KEY,
+    extraction_json TEXT NOT NULL,
+    analysis_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
