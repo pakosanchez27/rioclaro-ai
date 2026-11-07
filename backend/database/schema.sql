@@ -18,3 +18,21 @@ ON invoices(status);
 
 CREATE INDEX IF NOT EXISTS idx_invoices_date
 ON invoices(invoice_date);
+
+CREATE TABLE IF NOT EXISTS invoice_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id TEXT NOT NULL,
+    decision TEXT NOT NULL
+        CHECK (decision IN ('approve', 'reject')),
+    previous_status TEXT NOT NULL,
+    new_status TEXT NOT NULL,
+    notes TEXT,
+    reviewed_by_oid TEXT NOT NULL,
+    reviewed_at TEXT NOT NULL,
+
+    FOREIGN KEY (invoice_id)
+        REFERENCES invoices(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_reviews_invoice
+ON invoice_reviews(invoice_id);

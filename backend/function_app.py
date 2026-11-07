@@ -129,3 +129,71 @@ def invoices_detail(req: func.HttpRequest) -> func.HttpResponse:
         status_code=200,
         mimetype="application/json",
     )
+
+    from services.invoice_review import (
+    review_invoice,
+    ReviewValidationError,
+    InvoiceNotFoundError,
+    InvoiceAlreadyReviewedError,
+)
+
+@app.route(route="invoices/review", methods=["POST"])
+def invoices_review(req: func.HttpRequest) -> func.HttpResponse:
+
+    user, error = authorize(req, "invoices:review")
+
+    if error is not None:
+        return error
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return func.HttpResponse(
+            json.dumps({"error": "JSON invalido"}),
+            status_code=400,
+            mimetype="application/json",
+        )
+
+    if not isinstance(body, dict):
+        return func.HttpResponse(
+            json.dumps({"error": "Se esperaba un objeto JSON"}),
+            status_code=400,
+            mimetype="application/json",
+        )
+
+    try:
+        initialize_database()
+
+        result = review_invoice(
+            invoice_id=body.get("invoice_id"),
+            decision=body.get("decision"),
+            actor_oid=user["user_id"],
+            notes=body.get("notes"),
+        )
+
+        return func.HttpResponse(
+            json.dumps(result, ensure_ascii=False),
+            status_code=200,
+            mimetype="application/json",
+        )
+
+    except ReviewValidationError as exc:
+        return func.HttpResponse(
+            json.dumps({"error": str(exc)}),
+            status_code=400,
+            mimetype="application/json",
+        )
+
+    except InvoiceNotFoundError as exc:
+        return func.HttpResponse(
+            json.dumps({"error": str(exc)}),
+            status_code=404,
+            mimetype="application/json",
+        )
+
+    except InvoiceAlreadyReviewedError as exc:
+        return func.HttpResponse(
+            json.dumps({"error": str(exc)}),
+            status_code=409,
+            mimetype="application/json",
+        )
