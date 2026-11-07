@@ -1,5 +1,6 @@
 
 import json
+import os
 import azure.functions as func
 
 from security.entra_auth import (
@@ -7,6 +8,13 @@ from security.entra_auth import (
     AuthenticationError,
 )
 from security.permissions import has_permission
+
+DEMO_PERMISSIONS = {
+    "invoices:read",
+    "invoices:stats",
+    "invoices:analyze",
+    "invoices:review",
+}
 
 
 def error_response(status_code: int, message: str):
@@ -17,7 +25,52 @@ def error_response(status_code: int, message: str):
     )
 
 
+def local_demo_enabled() -> bool:
+    requested = os.getenv(
+        "DEMO_MODE", "false"
+    ).strip().lower() == "true"
+    environment = os.getenv(
+        "AZURE_FUNCTIONS_ENVIRONMENT",
+        "Development",
+    ).strip().lower()
+
+    # No permitir que esta modalidad local se active
+    # accidentalmente en Azure Functions desplegado.
+    return (
+        requested
+        and environment == "development"
+        and not os.getenv("WEBSITE_INSTANCE_ID")
+    )
+
+
 def authorize(req: func.HttpRequest, permission: str):
+    demo_requested = os.getenv(
+        "DEMO_MODE", "false"
+    ).strip().lower() == "true"
+
+    # Impedir un bypass accidental en producción.
+    if demo_requested and not local_demo_enabled():
+        return None, error_response(
+            503,
+            "Modo demostracion no disponible en este entorno.",
+        )
+
+    if local_demo_enabled():
+        if permission not in DEMO_PERMISSIONS or not has_permission(
+            ["analyst"], permission
+        ):
+            return None, error_response(
+                403,
+                "No tienes permisos para realizar esta operacion",
+            )
+
+        return {
+            "user_id": "local-demo-analyst",
+            "tenant_id": "local-demo",
+            "username": "Demo Analyst",
+            "roles": ["analyst"],
+        }, None
+
     authorization = req.headers.get("Authorization", "")
 
     parts = authorization.strip().split()
