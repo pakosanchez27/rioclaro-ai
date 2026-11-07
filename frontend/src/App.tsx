@@ -5,6 +5,7 @@ import AppLayout from './components/layout/AppLayout'
 import DashboardPage from './pages/DashboardPage'
 import FacturasPage from './pages/FacturasPage'
 import FacturaDetallePage from './pages/FacturaDetallePage'
+import AnalizarFacturaPage from './pages/AnalizarFacturaPage'
 import PlaceholderPage from './pages/PlaceholderPage'
 
 export default function App() {
@@ -22,12 +23,7 @@ export default function App() {
 
         <Route
           path="analizar"
-          element={
-            <PlaceholderPage
-              title="Analizar factura"
-              description="Carga y procesamiento inteligente de documentos."
-            />
-          }
+          element={<AnalizarFacturaPage />}
         />
 
         <Route

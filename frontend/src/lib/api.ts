@@ -91,3 +91,95 @@ export async function getInvoiceStats(): Promise<InvoiceStats> {
 
   return data
 }
+
+export interface ExtractionResult {
+  supplier_name: string | null
+  supplier_tax_id: string | null
+  invoice_number: string | null
+  invoice_date: string | null
+  subtotal: number | null
+  tax: number | null
+  total: number | null
+  currency: string | null
+  confidence: Record<string, number | null>
+  metadata: {
+    model: string
+    pages_analyzed: number
+    limited_to_first_page: boolean
+  }
+}
+
+export interface InvoiceFinding {
+  type: string
+  severity: 'info' | 'low' | 'medium' | 'high' | string
+  field: string
+  message: string
+}
+
+export interface InvoiceAnalysis {
+  invoice_number: string | null
+  financial_validation: {
+    subtotal: number | null
+    tax: number | null
+    total: number | null
+    currency: string | null
+    is_consistent: boolean | null
+    difference: string | null
+  }
+  findings: InvoiceFinding[]
+  requires_human_review: boolean
+  recommended_status: string
+  ai_analysis: {
+    summary: string
+    review_steps: string[]
+    deployment: string
+  }
+}
+
+export interface AnalyzeInvoiceResponse {
+  invoice_id: string
+  status: string
+  extraction: ExtractionResult
+  analysis: InvoiceAnalysis
+  created_at: string
+}
+
+export async function analyzeInvoice(
+  file: File
+): Promise<AnalyzeInvoiceResponse> {
+  const extension = file.name.split('.').pop()?.toLowerCase()
+
+  const mimeTypes: Record<string, string> = {
+    pdf: 'application/pdf',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+  }
+
+  const contentType = mimeTypes[extension ?? '']
+
+  if (!contentType) {
+    throw new Error('Selecciona un archivo PDF, PNG o JPG.')
+  }
+
+  if (file.size === 0 || file.size > 4_000_000) {
+    throw new Error(
+      'El archivo debe tener contenido y no superar los 4 MB.'
+    )
+  }
+
+  // Enviar el archivo directamente como bytes.
+  // No utilizar FormData: el backend espera el cuerpo binario.
+  const response = await api.post<AnalyzeInvoiceResponse>(
+    '/invoices/analyze',
+    file,
+    {
+      headers: {
+        'Content-Type': contentType,
+      },
+      timeout: 180_000,
+    }
+  )
+
+  return response.data
+}
