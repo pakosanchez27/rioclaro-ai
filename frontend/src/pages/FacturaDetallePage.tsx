@@ -4,6 +4,8 @@ import { ArrowLeft, FileText, AlertCircle } from 'lucide-react'
 import axios from 'axios'
 
 import { getInvoice } from '../lib/api'
+import InvoiceAnalysisPanel from '../components/InvoiceAnalysisPanel'
+import InvoiceReviewPanel from '../components/InvoiceReviewPanel'
 import {
   formatMoney,
   formatInvoiceDate,
@@ -125,15 +127,12 @@ export default function FacturaDetallePage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="font-bold text-slate-900">
-              Análisis y revisión
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              En la siguiente etapa mostraremos aquí los
-              hallazgos de la IA y el historial de revisiones.
-            </p>
-          </div>
+          <InvoiceAnalysisPanel invoiceId={invoice.id} />
+
+          <InvoiceReviewPanel
+            invoiceId={invoice.id}
+            status={invoice.status}
+          />
         </>
       ) : null}
     </div>

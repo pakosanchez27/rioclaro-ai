@@ -183,3 +183,84 @@ export async function analyzeInvoice(
 
   return response.data
 }
+
+export interface SavedInvoiceAnalysis {
+  invoice_id: string
+  extraction: ExtractionResult
+  analysis: InvoiceAnalysis
+  created_at: string
+}
+
+export interface InvoiceAnalysisLookup {
+  invoice_id: string
+  data: SavedInvoiceAnalysis | null
+}
+
+export interface InvoiceReviewRecord {
+  id: number
+  invoice_id: string
+  decision: 'approve' | 'reject'
+  previous_status: string
+  new_status: string
+  notes: string | null
+  reviewed_by_oid: string
+  reviewed_at: string
+}
+
+export interface InvoiceReviewHistory {
+  invoice_id: string
+  history: InvoiceReviewRecord[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type ReviewDecision = 'approve' | 'reject'
+
+export interface ReviewInvoiceRequest {
+  invoice_id: string
+  decision: ReviewDecision
+  notes: string
+}
+
+export interface ReviewInvoiceResponse {
+  review_id: number
+  invoice_id: string
+  decision: ReviewDecision
+  previous_status: string
+  status: string
+  notes: string
+  reviewed_by: string
+  reviewed_at: string
+}
+
+export async function getInvoiceAnalysis(
+  invoiceId: string
+): Promise<InvoiceAnalysisLookup> {
+  const response = await api.get<InvoiceAnalysisLookup>(
+    `/invoices/${encodeURIComponent(invoiceId)}/analysis`
+  )
+
+  return response.data
+}
+
+export async function getInvoiceReviewHistory(
+  invoiceId: string
+): Promise<InvoiceReviewHistory> {
+  const response = await api.get<InvoiceReviewHistory>(
+    `/invoices/${encodeURIComponent(invoiceId)}/reviews`
+  )
+
+  return response.data
+}
+
+export async function reviewInvoice(
+  payload: ReviewInvoiceRequest
+): Promise<ReviewInvoiceResponse> {
+  const response = await api.post<ReviewInvoiceResponse>(
+    '/invoices/review',
+    payload
+  )
+
+  return response.data
+}

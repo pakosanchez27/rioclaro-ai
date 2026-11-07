@@ -10,6 +10,7 @@ from repositories.invoices import (
 )
 
 from repositories.invoice_reviews import list_invoice_reviews
+from repositories.invoice_analyses import get_saved_invoice_analysis
 import logging
 
 from azure.core.exceptions import HttpResponseError
@@ -23,6 +24,12 @@ from services.document_intelligence import (
 from services.invoice_pipeline import (
     analyze_and_save_invoice,
     IncompleteInvoiceError,
+)
+from services.invoice_review import (
+    review_invoice,
+    ReviewValidationError,
+    InvoiceNotFoundError,
+    InvoiceAlreadyReviewedError,
 )
 
 app = func.FunctionApp(
@@ -146,12 +153,45 @@ def invoices_detail(req: func.HttpRequest) -> func.HttpResponse:
         mimetype="application/json",
     )
 
-    from services.invoice_review import (
-    review_invoice,
-    ReviewValidationError,
-    InvoiceNotFoundError,
-    InvoiceAlreadyReviewedError,
+
+@app.route(
+    route="invoices/{factura_id}/analysis",
+    methods=["GET"],
 )
+def invoices_saved_analysis(
+    req: func.HttpRequest,
+) -> func.HttpResponse:
+    user, error = authorize(req, "invoices:read")
+
+    if error is not None:
+        return error
+
+    invoice_id = req.route_params.get("factura_id", "")
+
+    initialize_database()
+
+    invoice = get_invoice(invoice_id)
+    if invoice is None:
+        return func.HttpResponse(
+            json.dumps({"error": "Factura no encontrada"}),
+            status_code=404,
+            mimetype="application/json",
+        )
+
+    saved_analysis = get_saved_invoice_analysis(invoice_id)
+
+    return func.HttpResponse(
+        json.dumps(
+            {
+                "invoice_id": invoice_id,
+                "data": saved_analysis,
+            },
+            ensure_ascii=False,
+        ),
+        status_code=200,
+        mimetype="application/json",
+    )
+
 
 @app.route(route="invoices/review", methods=["POST"])
 def invoices_review(req: func.HttpRequest) -> func.HttpResponse:
