@@ -27,3 +27,23 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
         status_code=200,
         mimetype="application/json"
     )
+
+    
+from security.auth_middleware import authorize
+
+
+@app.route(
+    route="auth/me",
+    methods=["GET"],
+)
+def auth_me(req: func.HttpRequest) -> func.HttpResponse:
+    user, error = authorize(req, "invoices:read")
+
+    if error is not None:
+        return error
+
+    return func.HttpResponse(
+        json.dumps(user, ensure_ascii=False),
+        status_code=200,
+        mimetype="application/json",
+    )
