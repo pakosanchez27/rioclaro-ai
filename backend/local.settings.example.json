@@ -1,0 +1,21 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "DEMO_MODE": "true",
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+    "STORAGE_BACKEND": "sqlite",
+    "AZURE_OPENAI_ENDPOINT": "",
+    "AZURE_OPENAI_API_KEY": "",
+    "AZURE_OPENAI_DEPLOYMENT": "gpt-rioclaro",
+    "DOCUMENTINTELLIGENCE_ENDPOINT": "",
+    "DOCUMENTINTELLIGENCE_API_KEY": "",
+    "ENTRA_TENANT_ID": "",
+    "ENTRA_API_AUDIENCE": "",
+    "ENABLE_INVOICE_ANALYSIS": "true",
+    "DEV_MAX_DAILY_INVOICE_ANALYSES": "20",
+    "ENABLE_ASSISTANT": "true",
+    "DEV_MAX_DAILY_ASSISTANT_QUESTIONS": "100"
+  }
+}

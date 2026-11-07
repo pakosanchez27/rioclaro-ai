@@ -8,13 +8,57 @@ export interface HealthResponse {
   timestamp: string
 }
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+if (import.meta.env.PROD && /^http:\/\//i.test(apiBaseUrl)) {
+  throw new Error('La API publicada debe utilizar HTTPS')
+}
+
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseUrl,
   timeout: 15000,
   headers: {
     Accept: 'application/json',
   },
 })
+
+export const evaluatorSession = {
+  get token() { return sessionStorage.getItem('evaluator_token') },
+  set(token: string, expiresAt: string) {
+    sessionStorage.setItem('evaluator_token', token)
+    sessionStorage.setItem('evaluator_expires_at', expiresAt)
+  },
+  clear() {
+    sessionStorage.removeItem('evaluator_token')
+    sessionStorage.removeItem('evaluator_expires_at')
+  },
+  get active() {
+    const expires = sessionStorage.getItem('evaluator_expires_at')
+    return Boolean(this.token && expires && Date.parse(expires) > Date.now())
+  },
+}
+
+api.interceptors.request.use(config => {
+  if (evaluatorSession.token) config.headers.Authorization = `Bearer ${evaluatorSession.token}`
+  return config
+})
+
+api.interceptors.response.use(response => response, error => {
+  if (error.response?.status === 401 && evaluatorSession.token) {
+    evaluatorSession.clear()
+    window.dispatchEvent(new Event('evaluator-session-expired'))
+  }
+  return Promise.reject(error)
+})
+
+export async function loginEvaluator(code: string) {
+  const { data } = await api.post<{access_token: string, expires_at: string}>('/auth/evaluator/login', { code })
+  evaluatorSession.set(data.access_token, data.expires_at)
+}
+
+export async function logoutEvaluator() {
+  try { await api.post('/auth/evaluator/logout') }
+  finally { evaluatorSession.clear() }
+}
 
 export async function getHealth(): Promise<HealthResponse> {
   const response = await api.get<HealthResponse>('/health')
@@ -133,6 +177,14 @@ export interface InvoiceAnalysis {
     summary: string
     review_steps: string[]
     deployment: string
+  }
+  duplicate_check?: {
+    status: 'none' | 'confirmed' | 'possible' | 'not_evaluable'
+    related_invoices: {
+      invoice_id: string
+      classification: 'confirmed' | 'possible'
+      reason: string
+    }[]
   }
 }
 
@@ -263,4 +315,99 @@ export async function reviewInvoice(
   )
 
   return response.data
+}
+
+export interface AssistantSource {
+  kind: string
+  id: string
+  updated_at: string | null
+}
+
+export interface AssistantResponse {
+  message_id: string
+  conversation_id: string
+  answer: string
+  sources: AssistantSource[]
+  information_type: string
+  warnings: string[]
+}
+
+export async function askAssistant(
+  message: string,
+  conversationId: string | null
+): Promise<AssistantResponse> {
+  const { data } = await api.post<AssistantResponse>(
+    '/assistant/ask',
+    { message, conversation_id: conversationId },
+    { timeout: 45_000 }
+  )
+  return data
+}
+
+export interface AssistantQuota {
+  remaining: number
+  limit: number
+  resets_at: string
+  timezone: 'UTC'
+  enabled: boolean
+  retry_after_seconds: number | null
+}
+
+export async function getAssistantQuota(): Promise<AssistantQuota> {
+  const { data } = await api.get<AssistantQuota>('/assistant/quota')
+  return data
+}
+
+export interface BusinessOptions {
+  branches: { code: string; name: string }[]
+  orders: { folio: string; branch_code: string }[]
+}
+
+export interface Complaint {
+  folio: string
+  order_folio: string
+  branch_name: string
+  message: string
+  category: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface BranchReport {
+  branches: {
+    code: string
+    name: string
+    delivered_sales: number
+    pending_orders: number
+    updated_at: string | null
+  }[]
+  products_sold: { sku: string; name: string; units_sold: number }[]
+  currency: string
+  data_label: string
+}
+
+export async function getBusinessOptions(): Promise<BusinessOptions> {
+  const { data } = await api.get<BusinessOptions>('/business/options')
+  return data
+}
+
+export async function getBranchReport(): Promise<BranchReport> {
+  const { data } = await api.get<BranchReport>('/business/reports')
+  return data
+}
+
+export async function createComplaint(payload: {
+  order_folio: string
+  branch_code: string
+  category: string
+  message: string
+}): Promise<{ folio: string; status: string; created_at: string }> {
+  const { data } = await api.post('/complaints', payload)
+  return data
+}
+
+export async function getComplaint(folio: string): Promise<Complaint> {
+  const { data } = await api.get<Complaint>(`/complaints/${encodeURIComponent(folio)}`)
+  return data
 }

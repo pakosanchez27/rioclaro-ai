@@ -129,7 +129,7 @@ def test_missing_amount_is_not_saved(
     # El sistema debe rechazar la factura
     # porque falta un importe obligatorio.
     with pytest.raises(pipeline.IncompleteInvoiceError):
-        pipeline.analyze_and_save_invoice(b"test")
+        pipeline.analyze_and_save_invoice(b"%PDF-1.4\ninvalid amounts")
 
     # Comprobar que no se guardo ninguna factura.
     with get_connection() as connection:

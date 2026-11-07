@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from database.connection import get_connection
+from database.table_storage import StorageConflictError
 
 
 class ReviewValidationError(Exception):
@@ -15,7 +16,7 @@ class InvoiceAlreadyReviewedError(Exception):
     pass
 
 
-def review_invoice(
+def _review_invoice_once(
     invoice_id: str,
     decision: str,
     actor_oid: str,
@@ -144,3 +145,16 @@ def review_invoice(
         "reviewed_by": actor_oid,
         "reviewed_at": reviewed_at,
     }
+
+
+def review_invoice(invoice_id: str, decision: str, actor_oid: str,
+                   notes: str | None = None) -> dict:
+    try:
+        return _review_invoice_once(invoice_id, decision, actor_oid, notes)
+    except StorageConflictError:
+        # La otra revisión pudo haber ganado la escritura condicional.
+        # Una lectura nueva decide si corresponde 409 o reintentar.
+        try:
+            return _review_invoice_once(invoice_id, decision, actor_oid, notes)
+        except StorageConflictError as exc:
+            raise InvoiceAlreadyReviewedError("Revision concurrente; actualiza la factura") from exc

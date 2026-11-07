@@ -27,7 +27,7 @@ const MAX_FILE_SIZE = 4_000_000
 const ALLOWED_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg']
 
 function getErrorMessage(error: Error): string {
-  if (axios.isAxiosError<{ error?: string }>(error)) {
+  if (axios.isAxiosError<{ error?: string; related_invoice_id?: string }>(error)) {
     const status = error.response?.status
     const serverMessage = error.response?.data?.error
 
@@ -35,6 +35,9 @@ function getErrorMessage(error: Error): string {
     if (status === 403) return 'No tienes permisos para analizar facturas.'
     if (status === 413) return 'El archivo supera el tamaño permitido.'
     if (status === 415) return 'El formato del documento no es compatible.'
+    if (status === 409) return serverMessage ?? 'Esta factura ya fue registrada o está en procesamiento.'
+    if (status === 429) return 'Se agotó la cuota diaria de análisis. Inténtalo mañana.'
+    if (status === 503) return 'El análisis está suspendido temporalmente.'
     if (status === 422) return serverMessage ?? 'No se pudieron identificar los datos necesarios.'
     if (status === 502) return 'Azure no pudo completar el análisis. Inténtalo después.'
 
@@ -189,6 +192,25 @@ function ResultPanel({ result }: { result: AnalyzeInvoiceResponse }) {
           </div>
         )}
       </div>
+
+      {analysis.duplicate_check?.status === 'possible' && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <h2 className="font-bold text-amber-900">Posible duplicado</h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Revisa estas facturas antes de aprobar el documento.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {analysis.duplicate_check.related_invoices.map((related) => (
+              <li key={related.invoice_id} className="text-sm text-amber-900">
+                <Link className="font-semibold underline" to={`/facturas/${encodeURIComponent(related.invoice_id)}`}>
+                  Ver factura relacionada
+                </Link>
+                {' · '}{related.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-2">
@@ -398,6 +420,16 @@ export default function AnalizarFacturaPage() {
           <p className="mt-2 text-sm text-red-700">
             {getErrorMessage(mutation.error)}
           </p>
+          {axios.isAxiosError<{ related_invoice_id?: string }>(mutation.error) &&
+            mutation.error.response?.status === 409 &&
+            mutation.error.response.data?.related_invoice_id && (
+              <Link
+                to={`/facturas/${encodeURIComponent(mutation.error.response.data.related_invoice_id)}`}
+                className="mt-2 inline-block text-sm font-semibold text-red-800 underline"
+              >
+                Ver factura relacionada
+              </Link>
+            )}
           <button
             type="button"
             onClick={() => mutation.reset()}

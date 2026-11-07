@@ -130,7 +130,7 @@ def normalize_invoice(result):
     }
 
 
-def extract_invoice(document_bytes: bytes):
+def validate_document_bytes(document_bytes: bytes) -> None:
     if not isinstance(document_bytes, bytes):
         raise DocumentValidationError(
             "El documento debe enviarse como bytes."
@@ -156,6 +156,10 @@ def extract_invoice(document_bytes: bytes):
         raise DocumentValidationError(
             "Formato no admitido. Usa PDF, PNG o JPEG."
         )
+
+
+def extract_invoice(document_bytes: bytes):
+    validate_document_bytes(document_bytes)
 
     endpoint = os.getenv("DOCUMENTINTELLIGENCE_ENDPOINT")
     api_key = os.getenv("DOCUMENTINTELLIGENCE_API_KEY")

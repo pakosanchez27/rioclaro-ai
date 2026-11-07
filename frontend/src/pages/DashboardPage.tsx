@@ -35,7 +35,7 @@ function ApiStatus() {
             Estado de la API
           </h3>
           <p className="text-sm text-slate-500">
-            Azure Functions · localhost:7071
+            Azure Functions · API local
           </p>
         </div>
       </div>
@@ -66,7 +66,7 @@ function ApiStatus() {
 
       {isError && (
         <p className="mt-3 text-xs text-slate-500">
-          Comprueba que Azure Functions esté ejecutándose en el puerto 7071.
+          Comprueba que Azure Functions esté ejecutándose y que la API esté configurada.
         </p>
       )}
     </div>
@@ -172,8 +172,7 @@ export default function DashboardPage() {
         </h3>
 
         <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-          Aquí aparecerán las últimas facturas procesadas cuando
-          habilitemos las consultas autenticadas.
+          Consulta el listado de facturas para ver los documentos registrados.
         </p>
       </section>
     </div>

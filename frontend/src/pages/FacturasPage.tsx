@@ -136,8 +136,8 @@ export default function FacturasPage() {
               No fue posible consultar las facturas
             </p>
             <p className="mt-2 text-sm text-slate-500">
-              Comprueba que Azure Functions esté funcionando
-              en el puerto 7071 y que el modo demo esté activo.
+              Comprueba que la API esté disponible y que tengas acceso
+              a las facturas de demostración.
             </p>
           </div>
         ) : filtered.length === 0 ? (

@@ -8,8 +8,20 @@ from database.connection import (
     get_connection,
     initialize_database,
 )
-from services.document_intelligence import extract_invoice
+from services.document_intelligence import extract_invoice, validate_document_bytes
 from services.azure_openai import analyze_invoice_with_ai
+from services.invoice_duplicates import (
+    document_hash,
+    claim_document,
+    release_document,
+    complete_document,
+    claim_business_invoice,
+    complete_business_invoice,
+    release_business_claim,
+    find_business_duplicate,
+    DuplicateBusinessError,
+)
+from services.ai_quota import reserve_ai_request
 
 
 class IncompleteInvoiceError(ValueError):
@@ -39,7 +51,7 @@ def _required_amount(invoice: dict, field: str) -> float:
     return float(number)
 
 
-def analyze_and_save_invoice(document_bytes: bytes) -> dict:
+def _process_claimed_invoice(document_bytes: bytes, sha256: str) -> dict:
     # 1. Extraer datos mediante Document Intelligence.
     extraction = extract_invoice(document_bytes)
 
@@ -69,8 +81,24 @@ def analyze_and_save_invoice(document_bytes: bytes) -> dict:
     tax = _required_amount(extraction, "tax")
     total = _required_amount(extraction, "total")
 
+    duplicate_check = find_business_duplicate(extraction)
+    if duplicate_check["status"] == "confirmed":
+        raise DuplicateBusinessError(
+            duplicate_check["related_invoices"][0]["invoice_id"]
+        )
+
+    business_claim_key = claim_business_invoice(extraction, sha256)
+
     # 3. Ejecutar validaciones financieras y Azure OpenAI.
     analysis = analyze_invoice_with_ai(extraction)
+    analysis["duplicate_check"] = duplicate_check
+    if duplicate_check["status"] == "possible":
+        analysis["findings"].append({
+            "type": "possible_duplicate",
+            "severity": "high",
+            "field": "invoice_number",
+            "message": "Posible factura duplicada; revisa las facturas relacionadas.",
+        })
 
     # 4. Generar identificadores y fechas.
     invoice_id = str(uuid.uuid4())
@@ -80,10 +108,7 @@ def analyze_and_save_invoice(document_bytes: bytes) -> dict:
 
     status = "pending_review"
 
-    # 5. Crear las tablas que falten.
-    initialize_database()
-
-    # 6. Guardar factura y analisis en una transaccion.
+    # 5. Guardar factura, analisis y hash en una transaccion.
     with get_connection() as connection:
         connection.execute(
             """
@@ -119,6 +144,9 @@ def analyze_and_save_invoice(document_bytes: bytes) -> dict:
             ),
         )
 
+        complete_document(connection, sha256, invoice_id)
+        complete_business_invoice(connection, business_claim_key, invoice_id)
+
         connection.execute(
             """
             INSERT INTO invoice_analyses (
@@ -152,3 +180,21 @@ def analyze_and_save_invoice(document_bytes: bytes) -> dict:
         "analysis": analysis,
         "created_at": created_at,
     }
+
+
+def analyze_and_save_invoice(document_bytes: bytes) -> dict:
+    validate_document_bytes(document_bytes)
+
+    initialize_database()
+    sha256 = document_hash(document_bytes)
+    claim_document(sha256)
+    try:
+        reserve_ai_request(
+            "invoice_analysis",
+            "MAX_DAILY_INVOICE_ANALYSES",
+            "ENABLE_INVOICE_ANALYSIS",
+        )
+        return _process_claimed_invoice(document_bytes, sha256)
+    finally:
+        release_document(sha256)
+        release_business_claim(sha256)

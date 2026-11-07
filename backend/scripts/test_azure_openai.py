@@ -69,9 +69,11 @@ def test_model_preserves_financial_validation(
                     NS(
                         message=NS(
                             content=json.dumps(data)
-                        )
+                        ),
+                        finish_reason="stop",
                     )
-                ]
+                ],
+                usage=None,
             )
 
     class FakeClient:
