@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import AppLayout from './components/layout/AppLayout'
 import DashboardPage from './pages/DashboardPage'
+import FacturasPage from './pages/FacturasPage'
+import FacturaDetallePage from './pages/FacturaDetallePage'
 import PlaceholderPage from './pages/PlaceholderPage'
 
 export default function App() {
@@ -11,14 +13,11 @@ export default function App() {
       <Route path="/" element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
 
+        <Route path="facturas" element={<FacturasPage />} />
+
         <Route
-          path="facturas"
-          element={
-            <PlaceholderPage
-              title="Facturas"
-              description="Consulta y administración de documentos."
-            />
-          }
+          path="facturas/:factura_id"
+          element={<FacturaDetallePage />}
         />
 
         <Route

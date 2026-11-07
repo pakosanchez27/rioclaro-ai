@@ -39,3 +39,55 @@ export async function getMyIdentity(
 
   return response.data
 }
+
+export interface Invoice {
+  id: string
+  supplier_name: string
+  supplier_tax_id: string | null
+  invoice_number: string | null
+  invoice_date: string | null
+  currency: string
+  subtotal: number
+  tax: number
+  total: number
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface InvoiceStats {
+  total_invoices: number
+  validated: number
+  pending_review: number
+  total_amount: number
+}
+
+export async function getInvoices(
+  limit = 20,
+  offset = 0
+): Promise<Invoice[]> {
+  const { data } = await api.get<{ data: Invoice[] }>(
+    '/invoices',
+    { params: { limit, offset } }
+  )
+
+  return data.data
+}
+
+export async function getInvoice(
+  invoiceId: string
+): Promise<Invoice> {
+  const { data } = await api.get<Invoice>(
+    `/invoices/${encodeURIComponent(invoiceId)}`
+  )
+
+  return data
+}
+
+export async function getInvoiceStats(): Promise<InvoiceStats> {
+  const { data } = await api.get<InvoiceStats>(
+    '/invoices/stats'
+  )
+
+  return data
+}

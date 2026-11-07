@@ -2,24 +2,16 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity,
   ArrowRight,
   CheckCircle2,
   CircleAlert,
-  Clock3,
   FileText,
   ScanLine,
   Server,
   Sparkles,
 } from 'lucide-react'
 import { getHealth } from '../lib/api'
-
-const metrics = [
-  { title: 'Total de facturas', icon: FileText },
-  { title: 'Pendientes de revisión', icon: Clock3 },
-  { title: 'Facturas validadas', icon: CheckCircle2 },
-  { title: 'Importe procesado', icon: Activity },
-]
+import InvoiceStatsPanel from '../components/InvoiceStatsPanel'
 
 function ApiStatus() {
   const { data, isPending, isError } = useQuery({
@@ -125,41 +117,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section>
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-slate-900">
-            Indicadores
-          </h2>
-          <p className="text-xs text-slate-500">
-            Disponibles después de conectar Microsoft Entra.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {metrics.map(({ title, icon: Icon }) => (
-            <div
-              key={title}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <div className="mb-5 flex size-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                <Icon size={20} />
-              </div>
-
-              <p className="text-sm font-medium text-slate-500">
-                {title}
-              </p>
-
-              <p className="mt-2 text-3xl font-bold text-slate-800">
-                —
-              </p>
-
-              <p className="mt-2 text-xs text-slate-400">
-                Esperando datos autorizados
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <InvoiceStatsPanel />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <ApiStatus />
